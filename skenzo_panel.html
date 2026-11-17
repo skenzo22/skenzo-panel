@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Skenzo Control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;800&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* لوحة واحدة داكنة بهوية المود: أسود + أحمر نيون، أخضر للحالات الشغالة */
+:root{
+  --bg:#0a0606; --panel:#140b0b; --panel2:#1c1010; --line:#3a1616;
+  --fg:#f2eaea; --muted:#a58d8d; --red:#ff2a2a; --red-dim:#7a1414;
+  --green:#22e07a; --amber:#ffb020;
+  --f-ui:"Cairo", "Segoe UI", Tahoma, sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:15px/1.6 var(--f-ui);
+  padding:env(safe-area-inset-top,0) max(14px,env(safe-area-inset-right,0px)) 40px max(14px,env(safe-area-inset-left,0px));}
+[hidden]{display:none!important}
+.wrap{max-width:760px;margin:0 auto}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 0 10px}
+.brand{font-weight:800;font-size:22px;letter-spacing:.5px;color:var(--fg);text-shadow:0 0 14px rgba(255,42,42,.7)}
+.brand span{color:var(--red)}
+.sub{color:var(--muted);font-size:12px}
+button{font:inherit;cursor:pointer;border-radius:10px;border:1.5px solid var(--red-dim);background:var(--panel2);color:var(--fg);padding:8px 14px}
+button:hover{border-color:var(--red)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--red);outline-offset:2px}
+button.primary{background:var(--red);border-color:var(--red);color:#fff;font-weight:700;box-shadow:0 0 14px rgba(255,42,42,.35)}
+button.ok{border-color:#1d6b40;color:var(--green)}
+button.small{padding:4px 10px;font-size:13px}
+button:disabled{opacity:.5;cursor:default}
+input,select,textarea{font:inherit;width:100%;background:#0f0808;color:var(--fg);border:1.5px solid var(--line);border-radius:10px;padding:9px 12px}
+textarea{min-height:90px;resize:vertical}
+label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+.card{background:var(--panel);border:2px dashed var(--red-dim);border-radius:14px;padding:16px;margin:14px 0}
+.card h2{margin:0 0 6px;font-size:17px;color:var(--red);text-shadow:0 0 10px rgba(255,42,42,.5)}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0}
+.tabs button{flex:1;min-width:100px}
+.tabs button.on{background:#2a0c0c;border-color:var(--red);color:#fff;box-shadow:0 0 12px rgba(255,42,42,.35)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.row>*{flex:1;min-width:140px}
+.stats{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0}
+.stat{flex:1;min-width:90px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.stat b{display:block;font-size:22px;font-variant-numeric:tabular-nums}
+.stat small{color:var(--muted)}
+.user{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px;margin:10px 0}
+.user .top{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.id{font-family:var(--f-mono);font-size:15px;color:#fff;background:#2a0c0c;border:1px solid var(--red-dim);border-radius:8px;padding:2px 8px;direction:ltr}
+.meta{color:var(--muted);font-size:13px}
+.chip{font-size:12px;border-radius:99px;padding:1px 9px;border:1px solid var(--line)}
+.chip.on{color:var(--green);border-color:#1d6b40}
+.chip.ban{color:#fff;background:var(--red);border-color:var(--red)}
+.chip.old{color:var(--amber);border-color:#6b4a10}
+.actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.msg{display:flex;gap:8px;align-items:flex-start;border-top:1px dashed var(--line);padding:8px 0 0;margin-top:8px;font-size:14px}
+.msg .t{flex:1;min-width:0;white-space:pre-wrap;word-break:break-word}
+.seen{font-size:12px;white-space:nowrap}
+.seen.y{color:var(--green)} .seen.n{color:var(--muted)}
+.empty{color:var(--muted);text-align:center;padding:18px}
+.err{color:#ff8080;font-size:14px;margin-top:8px;min-height:1em}
+#toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#1c1010;border:1.5px solid var(--red);color:#fff;padding:8px 16px;border-radius:10px;box-shadow:0 0 18px rgba(255,42,42,.4);z-index:20}
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:flex-end;justify-content:center;z-index:15;padding:0 10px}
+.sheet .card{width:100%;max-width:560px;margin:0 0 calc(10px + env(safe-area-inset-bottom,0px));border-style:solid}
+.ltr{direction:ltr;text-align:left}
+@media (prefers-reduced-motion:no-preference){button{transition:border-color .15s, box-shadow .15s}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="brand">SKENZO <span>CONTROL</span></div>
+      <div class="sub" id="who">لوحة تحكم المود</div>
+    </div>
+    <button class="small" id="logoutBtn" hidden>خروج</button>
+  </header>
+
+  <!-- تسجيل الدخول -->
+  <section id="login" class="card">
+    <h2>تسجيل الدخول</h2>
+    <form id="loginForm" autocomplete="on">
+      <label for="email">الإيميل</label>
+      <input id="email" type="email" class="ltr" autocomplete="username" required>
+      <label for="pass">كلمة السر</label>
+      <input id="pass" type="password" class="ltr" autocomplete="current-password" required>
+      <div style="margin-top:14px"><button class="primary" type="submit" id="loginBtn">دخول</button></div>
+      <div class="err" id="loginErr"></div>
+    </form>
+  </section>
+
+  <!-- اللوحة -->
+  <section id="app" hidden>
+    <div class="stats">
+      <div class="stat"><b id="stUsers">0</b><small>مستخدم</small></div>
+      <div class="stat"><b id="stToday">0</b><small>نشط آخر 24 ساعة</small></div>
+      <div class="stat"><b id="stBans">0</b><small>محظور الآن</small></div>
+    </div>
+
+    <div class="tabs">
+      <button data-tab="users" class="on">المستخدمون</button>
+      <button data-tab="broadcast">رسالة للكل</button>
+      <button data-tab="update">التحديث</button>
+    </div>
+
+    <!-- المستخدمون -->
+    <div id="tab-users">
+      <div class="row" style="margin-top:10px">
+        <input id="search" placeholder="ابحث بالمعرّف أو الموديل أو النسخة">
+        <button id="refreshBtn" style="flex:0 0 auto">تحديث القائمة</button>
+      </div>
+      <div id="users"></div>
+    </div>
+
+    <!-- رسالة للكل -->
+    <div id="tab-broadcast" hidden>
+      <div class="card">
+        <h2>رسالة لكل المستخدمين</h2>
+        <div class="sub">تظهر مرة واحدة لكل مستخدم عند فتح المود. المستخدم الجديد لا يرى الرسائل الأقدم من تثبيته.</div>
+        <label for="bLang">اللغة</label>
+        <select id="bLang"><option value="ar">عربي (رسالة من المطور)</option><option value="en">English (Message from Dev)</option><option value="">إشعار عادي</option></select>
+        <label for="bText">النص</label>
+        <textarea id="bText" placeholder="اكتب الرسالة…"></textarea>
+        <div style="margin-top:10px"><button class="primary" id="bSend">إرسال للكل</button></div>
+      </div>
+      <div id="bList"></div>
+    </div>
+
+    <!-- التحديث -->
+    <div id="tab-update" hidden>
+      <div class="card">
+        <h2>أقل نسخة مسموحة</h2>
+        <div class="sub">كل نسخة أقل من هذا الرقم تتوقف وتظهر لها نافذة "تحديث مطلوب" مع رابط التحميل. اتركه فارغاً ليعمل الجميع. 999 = إيقاف كل النسخ.</div>
+        <div class="row">
+          <div><label for="minVer">رقم النسخة</label><input id="minVer" class="ltr" placeholder="مثال 2.6" inputmode="decimal"></div>
+        </div>
+        <label for="upUrl">رابط التحميل</label>
+        <input id="upUrl" class="ltr" placeholder="https://…">
+        <div style="margin-top:12px"><button class="primary" id="saveCfg">حفظ</button></div>
+        <div class="sub" id="cfgNow" style="margin-top:8px"></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- نافذة رسالة / حظر -->
+<div class="sheet" id="sheet" hidden>
+  <div class="card">
+    <h2 id="shTitle"></h2>
+    <div class="sub" id="shSub"></div>
+    <div id="shMsg">
+      <label for="mLang">اللغة</label>
+      <select id="mLang"><option value="ar">عربي (رسالة من المطور)</option><option value="en">English (Message from Dev)</option><option value="">إشعار عادي</option></select>
+      <label for="mText">النص</label>
+      <textarea id="mText"></textarea>
+    </div>
+    <div id="shBan">
+      <label for="banMin">المدة</label>
+      <select id="banMin">
+        <option value="10">10 دقائق</option><option value="30">30 دقيقة</option><option value="60" selected>ساعة</option>
+        <option value="360">6 ساعات</option><option value="1440">يوم</option><option value="10080">أسبوع</option><option value="5256000">دائم (10 سنوات)</option>
+      </select>
+      <label for="banReason">السبب (يظهر للمستخدم)</label>
+      <input id="banReason" placeholder="مثال: سبام في الغرفة">
+    </div>
+    <div class="actions" style="margin-top:14px">
+      <button class="primary" id="shOk">إرسال</button>
+      <button id="shCancel">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" hidden></div>
+
+<script>
+const CFG = {
+  apiKey: "AIzaSyDFwNpso0061rSt2wKU8mb6pHaXDRu9EIw",
+  db: "https://skenzo-7d816-default-rtdb.europe-west1.firebasedatabase.app"
+};
+const $ = s => document.querySelector(s);
+let idToken = null, tokenExp = 0, refreshTok = null, email = "";
+let DATA = {users:{}, cmds:{}, seen:{}, broadcast:{}, bseen:{}, config:{}};
+
+function toast(t){ const el=$("#toast"); el.textContent=t; el.hidden=false; clearTimeout(toast._t); toast._t=setTimeout(()=>el.hidden=true,2200); }
+function store(k,v){ try{ v==null?localStorage.removeItem(k):localStorage.setItem(k,v);}catch(e){} }
+function load(k){ try{ return localStorage.getItem(k);}catch(e){ return null; } }
+function esc(s){ return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function ago(ms){
+  if(!ms) return "—";
+  const d=(Date.now()-ms)/1000;
+  if(d<60) return "الآن"; if(d<3600) return "قبل "+Math.floor(d/60)+" د";
+  if(d<86400) return "قبل "+Math.floor(d/3600)+" س"; return "قبل "+Math.floor(d/86400)+" يوم";
+}
+function left(ms){ const m=Math.ceil((ms-Date.now())/60000); if(m>525600) return "دائم"; if(m>=1440) return Math.floor(m/1440)+" يوم"; if(m>=60) return Math.floor(m/60)+" س"; return m+" د"; }
+function cmpVer(a,b){ const x=String(a).split("."),y=String(b).split("."); for(let i=0;i<Math.max(x.length,y.length);i++){ const p=parseInt(x[i]||0)||0,q=parseInt(y[i]||0)||0; if(p!==q) return p<q?-1:1;} return 0; }
+
+/* ---------- تسجيل الدخول (Firebase Auth REST) ---------- */
+const AUTH_ERR = {EMAIL_NOT_FOUND:"الإيميل غير موجود",INVALID_PASSWORD:"كلمة السر خاطئة",INVALID_LOGIN_CREDENTIALS:"الإيميل أو كلمة السر خاطئة",USER_DISABLED:"الحساب معطّل",TOO_MANY_ATTEMPTS_TRY_LATER:"محاولات كثيرة، انتظر قليلاً"};
+async function signIn(e, p){
+  const r = await fetch("https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key="+CFG.apiKey,
+    {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:e,password:p,returnSecureToken:true})});
+  const j = await r.json();
+  if(!r.ok){ const code=(j.error&&j.error.message||"").split(" ")[0]; throw new Error(AUTH_ERR[code]||code||"فشل الدخول"); }
+  setTokens(j.idToken, j.refreshToken, +j.expiresIn, j.email);
+}
+async function refresh(){
+  const r = await fetch("https://securetoken.googleapis.com/v1/token?key="+CFG.apiKey,
+    {method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:"grant_type=refresh_token&refresh_token="+encodeURIComponent(refreshTok)});
+  const j = await r.json();
+  if(!r.ok) throw new Error("انتهت الجلسة، سجّل الدخول من جديد");
+  setTokens(j.id_token, j.refresh_token, +j.expires_in, email);
+}
+function setTokens(id, rt, sec, em){
+  idToken=id; refreshTok=rt; tokenExp=Date.now()+(sec-60)*1000; email=em||email;
+  store("sk_rt", rt); store("sk_email", email);
+}
+async function token(){ if(!idToken || Date.now()>tokenExp) await refresh(); return idToken; }
+
+/* ---------- قاعدة البيانات (REST) ---------- */
+async function db(method, path, body){
+  const r = await fetch(CFG.db+path+".json?auth="+encodeURIComponent(await token()),
+    {method, headers:{"Content-Type":"application/json"}, body: body===undefined?undefined:JSON.stringify(body)});
+  const t = await r.text();
+  if(!r.ok){
+    if(r.status===401) throw new Error("لا توجد صلاحية: تأكد أن قواعد الحماية ملصوقة في Firebase وأن الـ UID صحيح");
+    throw new Error("خطأ "+r.status+": "+t.slice(0,120));
+  }
+  return t ? JSON.parse(t) : null;
+}
+const TS = {".sv":"timestamp"};
+
+async function loadAll(){
+  const [users,cmds,seen,broadcast,bseen,config] = await Promise.all(
+    ["/users","/cmds","/seen","/broadcast","/bseen","/config"].map(p=>db("GET",p)));
+  DATA = {users:users||{}, cmds:cmds||{}, seen:seen||{}, broadcast:broadcast||{}, bseen:bseen||{}, config:config||{}};
+  render();
+}
+
+/* ---------- العرض ---------- */
+function render(){
+  const now=Date.now(), U=DATA.users, ids=Object.keys(U);
+  const minV=DATA.config.min_version||"";
+  $("#stUsers").textContent=ids.length;
+  $("#stToday").textContent=ids.filter(i=>now-(U[i].last_seen||0)<86400000).length;
+  $("#stBans").textContent=Object.values(DATA.cmds).filter(c=>c&&c.ban&&c.ban.until>now).length;
+
+  const q=$("#search").value.trim().toLowerCase();
+  const list=ids.filter(i=>{ if(!q) return true; const u=U[i]; return [i,u.short,u.model,u.version].join(" ").toLowerCase().includes(q); })
+    .sort((a,b)=>(U[b].last_seen||0)-(U[a].last_seen||0));
+  const box=$("#users");
+  if(!list.length){ box.innerHTML='<div class="empty">'+(ids.length?"لا نتائج للبحث":"لا يوجد مستخدمون بعد. سيظهرون هنا بعد أول فتح للنسخة الجديدة من المود.")+'</div>'; }
+  else box.innerHTML=list.map(i=>{
+    const u=U[i], c=DATA.cmds[i]||{}, banned=c.ban&&c.ban.until>now;
+    const online=now-(u.last_seen||0)<5*60000;
+    const old=minV && u.version && cmpVer(u.version,minV)<0;
+    const msgs=Object.entries(c.msgs||{}).sort((a,b)=>(b[1].ts||0)-(a[1].ts||0));
+    const seen=DATA.seen[i]||{};
+    return `<div class="user">
+      <div class="top">
+        <span class="id">${esc(u.short||i.slice(0,6))}</span>
+        ${banned?`<span class="chip ban">محظور · باقي ${left(c.ban.until)}</span>`:""}
+        ${online?'<span class="chip on">متصل الآن</span>':""}
+        ${old?'<span class="chip old">نسخة موقوفة</span>':""}
+      </div>
+      <div class="meta">${esc(u.model||"?")} · نسخة ${esc(u.version||"?")} · آخر ظهور ${ago(u.last_seen)} · أول مرة ${ago(u.first_seen)}</div>
+      ${banned&&c.ban.reason?`<div class="meta">سبب الحظر: ${esc(c.ban.reason)}</div>`:""}
+      <div class="actions">
+        <button class="small" data-act="msg" data-id="${esc(i)}">رسالة</button>
+        ${banned?`<button class="small ok" data-act="unban" data-id="${esc(i)}">فك الحظر</button>`:`<button class="small" data-act="ban" data-id="${esc(i)}">حظر</button>`}
+      </div>
+      ${msgs.map(([k,m])=>`<div class="msg"><div class="t">${esc(m.text)}</div>
+        <span class="seen ${seen[k]?"y":"n"}">${seen[k]?"✓ وصلت":"⏳ لم تصل"}</span>
+        <button class="small" data-act="delmsg" data-id="${esc(i)}" data-k="${esc(k)}">حذف</button></div>`).join("")}
+    </div>`;
+  }).join("");
+
+  const B=Object.entries(DATA.broadcast).sort((a,b)=>(b[1].ts||0)-(a[1].ts||0));
+  $("#bList").innerHTML=B.length?B.map(([k,m])=>`<div class="user"><div class="msg" style="border:0;margin:0;padding:0">
+      <div class="t">${esc(m.text)}<div class="meta">${ago(m.ts)} · ${m.lang==="ar"?"عربي":m.lang==="en"?"English":"إشعار"}</div></div>
+      <span class="seen y">✓ ${Object.keys(DATA.bseen[k]||{}).length}</span>
+      <button class="small" data-act="delb" data-k="${esc(k)}">حذف</button></div></div>`).join("")
+    :'<div class="empty">لم ترسل رسائل للكل بعد</div>';
+
+  $("#minVer").value=DATA.config.min_version||"";
+  $("#upUrl").value=DATA.config.update_url||"";
+  const stopped=ids.filter(i=>minV&&U[i].version&&cmpVer(U[i].version,minV)<0).length;
+  $("#cfgNow").textContent=minV?`الآن: النسخ الأقل من ${minV} موقوفة (${stopped} مستخدم على نسخة قديمة).`:"الآن: كل النسخ تعمل.";
+}
+
+/* ---------- الأحداث ---------- */
+document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll(".tabs button").forEach(x=>x.classList.toggle("on",x===b));
+  ["users","broadcast","update"].forEach(t=>$("#tab-"+t).hidden=t!==b.dataset.tab);
+});
+$("#search").oninput=render;
+$("#refreshBtn").onclick=()=>run(loadAll,"تم التحديث");
+
+async function run(fn, okMsg){
+  try{ await fn(); if(okMsg) toast(okMsg); }
+  catch(e){ toast(e.message); if(/الجلسة/.test(e.message)) logout(); }
+}
+
+let sheetMode=null, sheetId=null;
+function openSheet(mode,id){
+  sheetMode=mode; sheetId=id;
+  const u=DATA.users[id]||{};
+  $("#shTitle").textContent= mode==="msg"?"رسالة إلى "+(u.short||id.slice(0,6)) : "حظر "+(u.short||id.slice(0,6));
+  $("#shSub").textContent= mode==="msg"?"تظهر له مرة واحدة عند فتح المود، وتبقى حتى يراها.":"تظهر له نافذة الحظر حتى تنتهي المدة أو تفك الحظر.";
+  $("#shMsg").hidden=mode!=="msg"; $("#shBan").hidden=mode!=="ban";
+  $("#shOk").textContent= mode==="msg"?"إرسال":"حظر";
+  $("#mText").value=""; $("#banReason").value="";
+  $("#sheet").hidden=false;
+}
+$("#shCancel").onclick=()=>$("#sheet").hidden=true;
+$("#sheet").onclick=e=>{ if(e.target.id==="sheet") $("#sheet").hidden=true; };
+$("#shOk").onclick=()=>run(async()=>{
+  if(sheetMode==="msg"){
+    const text=$("#mText").value.trim(); if(!text) throw new Error("اكتب نص الرسالة");
+    await db("POST","/cmds/"+sheetId+"/msgs",{lang:$("#mLang").value,text,ts:TS});
+  }else{
+    const min=+$("#banMin").value, reason=$("#banReason").value.trim()||"You are temporarily banned.";
+    await db("PUT","/cmds/"+sheetId+"/ban",{until:Date.now()+min*60000,reason});
+  }
+  $("#sheet").hidden=true; await loadAll();
+}, "تم");
+
+$("#users").onclick=e=>{
+  const b=e.target.closest("button"); if(!b) return;
+  const id=b.dataset.id, act=b.dataset.act;
+  if(act==="msg"||act==="ban") openSheet(act,id);
+  if(act==="unban") run(async()=>{ await db("DELETE","/cmds/"+id+"/ban"); await loadAll(); },"تم فك الحظر");
+  if(act==="delmsg") run(async()=>{ await db("DELETE","/cmds/"+id+"/msgs/"+b.dataset.k); await db("DELETE","/seen/"+id+"/"+b.dataset.k); await loadAll(); },"تم الحذف");
+};
+$("#bList").onclick=e=>{
+  const b=e.target.closest("button[data-act=delb]"); if(!b) return;
+  run(async()=>{ await db("DELETE","/broadcast/"+b.dataset.k); await db("DELETE","/bseen/"+b.dataset.k); await loadAll(); },"تم الحذف");
+};
+$("#bSend").onclick=()=>run(async()=>{
+  const text=$("#bText").value.trim(); if(!text) throw new Error("اكتب نص الرسالة");
+  await db("POST","/broadcast",{lang:$("#bLang").value,text,ts:TS});
+  $("#bText").value=""; await loadAll();
+},"تم الإرسال للكل");
+$("#saveCfg").onclick=()=>run(async()=>{
+  const v=$("#minVer").value.trim(), url=$("#upUrl").value.trim();
+  if(v && !/^\d+(\.\d+)*$/.test(v)) throw new Error("رقم النسخة يجب أن يكون مثل 2.6");
+  await db("PUT","/config",{min_version:v,update_url:url});
+  await loadAll();
+},"تم الحفظ");
+
+$("#loginForm").onsubmit=async e=>{
+  e.preventDefault(); $("#loginErr").textContent=""; $("#loginBtn").disabled=true;
+  try{ await signIn($("#email").value.trim(), $("#pass").value); $("#pass").value=""; await enter(); }
+  catch(err){ $("#loginErr").textContent=err.message; }
+  $("#loginBtn").disabled=false;
+};
+async function enter(){
+  $("#login").hidden=true; $("#app").hidden=false; $("#logoutBtn").hidden=false;
+  $("#who").textContent=email;
+  try{ await loadAll(); }catch(e){ toast(e.message); }
+}
+function logout(){
+  idToken=null; refreshTok=null; store("sk_rt",null);
+  $("#login").hidden=false; $("#app").hidden=true; $("#logoutBtn").hidden=true; $("#who").textContent="لوحة تحكم المود";
+}
+$("#logoutBtn").onclick=logout;
+
+// جلسة محفوظة: لا حاجة لكتابة كلمة السر كل مرة
+(async()=>{
+  const rt=load("sk_rt"); email=load("sk_email")||"";
+  if(email) $("#email").value=email;
+  if(rt){ refreshTok=rt; try{ await refresh(); await enter(); }catch(e){ logout(); } }
+})();
+</script>
+</body>
+</html>
