@@ -43,8 +43,18 @@ textarea{min-height:90px;resize:vertical}
 label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
 .card{background:var(--panel);border:2px dashed var(--red-dim);border-radius:14px;padding:16px;margin:14px 0}
 .card h2{margin:0 0 6px;font-size:17px;color:var(--red);text-shadow:0 0 10px rgba(255,42,42,.5)}
-.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:6px 0}
-@media (max-width:520px){.tabs{grid-template-columns:repeat(2,1fr)}}
+.tabs{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:6px 0}
+@media (max-width:620px){.tabs{grid-template-columns:repeat(3,1fr)}}
+button.danger{border-color:var(--red);color:#ff8080}
+button.danger.armed{background:var(--red);color:#fff}
+.bars{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.bar{display:grid;grid-template-columns:minmax(70px,auto) 1fr auto;gap:10px;align-items:center;font-size:14px}
+.bar .track{height:12px;background:#0f0808;border:1px solid var(--line);border-radius:99px;overflow:hidden}
+.bar .fill{height:100%;background:var(--red);box-shadow:0 0 10px rgba(255,42,42,.5);border-radius:99px}
+.bar.cur .fill{background:var(--green);box-shadow:0 0 10px rgba(34,224,122,.4)}
+.bar b{font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-top:8px}
+.confirm{margin-top:12px;padding:12px;border:1.5px solid var(--red);border-radius:12px;background:#1f0909}
 .tabs button{position:relative}
 .badge{display:inline-block;min-width:20px;padding:0 6px;margin-inline-start:6px;border-radius:99px;background:var(--red);color:#fff;font-size:12px;line-height:20px;font-variant-numeric:tabular-nums}
 .user.unread{border-color:var(--red);box-shadow:0 0 12px rgba(255,42,42,.25)}
@@ -111,6 +121,7 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
 
   <!-- اللوحة -->
   <section id="app" hidden>
+    <div class="err" id="loadErr" hidden style="background:#2a0c0c;border:1.5px solid var(--red);border-radius:10px;padding:10px 12px;margin-top:10px"></div>
     <div class="updated" id="updated"></div>
     <div class="stats">
       <div class="stat"><b id="stUsers">0</b><small>مستخدم</small></div>
@@ -123,6 +134,7 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
       <button data-tab="users">المستخدمون</button>
       <button data-tab="broadcast">رسالة للكل</button>
       <button data-tab="update">التحديث</button>
+      <button data-tab="seasons">المواسم</button>
     </div>
 
     <!-- الرسائل الواردة من المستخدمين -->
@@ -175,6 +187,32 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
         <div style="margin-top:12px"><button class="primary" id="saveOrig">حفظ</button></div>
       </div>
     </div>
+
+    <!-- المواسم -->
+    <div id="tab-seasons" hidden>
+      <div class="card">
+        <h2 id="curName">الموسم الحالي</h2>
+        <div class="sub" id="curSince"></div>
+        <div class="grid2" id="curStats"></div>
+        <label for="newSeason">اسم الموسم الجديد</label>
+        <input id="newSeason" placeholder="مثال: تحديث 2.7">
+        <div style="margin-top:10px"><button class="primary" id="startSeason">إنهاء الموسم وبدء موسم جديد</button></div>
+        <div class="confirm" id="seasonConfirm" hidden>
+          <div>سيتم <b>حفظ إحصائيات</b> الموسم الحالي ونسخة من بياناته في قائمة المواسم، ثم <b>تصفير</b> المستخدمين والوارد ورسائل الكل في الصفحة.</div>
+          <div class="sub" style="margin-top:6px">الحظر النشط يبقى كما هو. المستخدمون يرجعون للقائمة تلقائياً عندما يفتحون المود.</div>
+          <div class="actions" style="margin-top:10px">
+            <button class="primary" id="confirmSeason">نعم، ابدأ الموسم الجديد</button>
+            <button id="cancelSeason">إلغاء</button>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>مقارنة المواسم</h2>
+        <div class="sub">عدد المستخدمين الذين فتحوا المود في كل موسم. الأخضر هو الموسم الحالي.</div>
+        <div class="bars" id="seasonBars"></div>
+      </div>
+      <div id="seasonList"></div>
+    </div>
   </section>
 </div>
 
@@ -215,7 +253,7 @@ const CFG = {
 };
 const $ = s => document.querySelector(s);
 let idToken = null, tokenExp = 0, refreshTok = null, email = "";
-let DATA = {users:{}, cmds:{}, seen:{}, broadcast:{}, bseen:{}, config:{}, inbox:{}};
+let DATA = {users:{}, cmds:{}, seen:{}, broadcast:{}, bseen:{}, config:{}, inbox:{}, seasons:{}};
 
 function toast(t){ const el=$("#toast"); el.textContent=t; el.hidden=false; clearTimeout(toast._t); toast._t=setTimeout(()=>el.hidden=true,2200); }
 function store(k,v){ try{ v==null?localStorage.removeItem(k):localStorage.setItem(k,v);}catch(e){} }
@@ -266,9 +304,13 @@ async function db(method, path, body){
 const TS = {".sv":"timestamp"};
 
 async function loadAll(){
-  const [users,cmds,seen,broadcast,bseen,config,inbox] = await Promise.all(
-    ["/users","/cmds","/seen","/broadcast","/bseen","/config","/inbox"].map(p=>db("GET",p)));
-  DATA = {users:users||{}, cmds:cmds||{}, seen:seen||{}, broadcast:broadcast||{}, bseen:bseen||{}, config:config||{}, inbox:inbox||{}};
+  try{ await loadAllInner(); $("#loadErr").hidden=true; }
+  catch(e){ $("#loadErr").textContent="تعذر تحميل البيانات: "+e.message; $("#loadErr").hidden=false; throw e; }
+}
+async function loadAllInner(){
+  const [users,cmds,seen,broadcast,bseen,config,inbox,seasons] = await Promise.all(
+    ["/users","/cmds","/seen","/broadcast","/bseen","/config","/inbox","/seasons"].map(p=>db("GET",p)));
+  DATA = {users:users||{}, cmds:cmds||{}, seen:seen||{}, broadcast:broadcast||{}, bseen:bseen||{}, config:config||{}, inbox:inbox||{}, seasons:seasons||{}};
   render();
   $("#updated").textContent = "آخر تحديث " + new Date().toLocaleTimeString("ar-TN",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
 }
@@ -284,6 +326,88 @@ function fmtDate(ms){ return ms? new Date(ms).toLocaleString("ar-TN",{year:"nume
 function sameAccount(id){
   const u=DATA.users[id]; if(!u||!u.gid) return [];
   return Object.keys(DATA.users).filter(k=>k!==id && DATA.users[k].gid===u.gid);
+}
+
+/* ---------- المواسم ---------- */
+function countBy(list, key, top){
+  const m={}; list.forEach(u=>{ const k=(u[key]||"?"); m[k]=(m[k]||0)+1; });
+  return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,top||99).map(([k,n])=>({k,n}));
+}
+function seasonStart(){
+  const c=DATA.config; if(c.season_start) return c.season_start;
+  const fs=Object.values(DATA.users).map(u=>u.first_seen||0).filter(Boolean);
+  return fs.length?Math.min(...fs):Date.now();
+}
+function liveStats(){
+  const now=Date.now(), start=seasonStart(), U=Object.values(DATA.users);
+  return {
+    users:U.length,
+    new_installs:U.filter(u=>u.inst&&u.inst>=start).length,
+    active_24h:U.filter(u=>now-(u.last_seen||0)<86400000).length,
+    inbox:Object.keys(DATA.inbox).length,
+    broadcasts:Object.keys(DATA.broadcast).length,
+    bans:Object.values(DATA.cmds).filter(c=>c&&c.ban&&c.ban.until>now).length,
+    versions:countBy(U,"version"),
+    models:countBy(U,"model",6)
+  };
+}
+function statTiles(st){
+  return [["مستخدم",st.users],["تثبيت جديد",st.new_installs],["نشط آخر يوم",st.active_24h],["رسائل واردة",st.inbox]]
+    .map(([l,n])=>`<div class="stat"><b>${n||0}</b><small>${l}</small></div>`).join("");
+}
+function renderSeasons(){
+  const c=DATA.config, st=liveStats();
+  $("#curName").textContent="الموسم الحالي: "+(c.season_name||"الموسم الأول");
+  $("#curSince").textContent="منذ "+fmtDate(seasonStart())+(st.versions.length?" · النسخ: "+st.versions.map(v=>v.k+" ("+v.n+")").join("، "):"");
+  $("#curStats").innerHTML=statTiles(st);
+
+  const past=Object.entries(DATA.seasons).sort((a,b)=>(b[1].end||0)-(a[1].end||0));
+  const rows=[{name:(c.season_name||"الموسم الأول")+" (الحالي)",n:st.users,cur:true}]
+    .concat(past.map(([k,x])=>({name:x.name||"بدون اسم",n:(x.stats&&x.stats.users)||0})));
+  const max=Math.max(1,...rows.map(r=>r.n));
+  $("#seasonBars").innerHTML=rows.map(r=>`<div class="bar ${r.cur?"cur":""}"><span>${esc(r.name)}</span>
+    <div class="track"><div class="fill" style="width:${Math.max(2,Math.round(r.n/max*100))}%"></div></div><b>${r.n}</b></div>`).join("");
+
+  $("#seasonList").innerHTML=past.length?past.map(([k,x])=>{
+    const s2=x.stats||{};
+    return `<div class="card" style="border-style:solid">
+      <h2>${esc(x.name||"بدون اسم")}</h2>
+      <div class="sub">${fmtDate(x.start)} ← ${fmtDate(x.end)}</div>
+      <div class="grid2">${statTiles(s2)}</div>
+      ${(s2.versions||[]).length?`<div class="meta" style="margin-top:8px">النسخ: ${s2.versions.map(v=>esc(v.k)+" ("+v.n+")").join("، ")}</div>`:""}
+      ${(s2.models||[]).length?`<div class="meta">أكثر الأجهزة: ${s2.models.map(v=>esc(v.k)+" ("+v.n+")").join("، ")}</div>`:""}
+      <div class="actions">
+        ${x.has_data?`<button class="small" data-act="dl" data-k="${esc(k)}">تنزيل البيانات (JSON)</button>
+        <button class="small danger" data-act="purge" data-k="${esc(k)}">تفريغ البيانات وإبقاء الإحصائيات</button>`:'<span class="meta">البيانات مُفرّغة، بقيت الإحصائيات فقط</span>'}
+        <button class="small danger" data-act="delseason" data-k="${esc(k)}">حذف الموسم كاملاً</button>
+      </div></div>`;
+  }).join(""):'<div class="empty">لا توجد مواسم سابقة بعد. عند نشر تحديث جديد، اكتب اسمه في الأعلى واضغط "إنهاء الموسم وبدء موسم جديد".</div>';
+}
+
+function armed(b, label){
+  if(b.classList.contains("armed")) return true;
+  const old=b.textContent; b.classList.add("armed"); b.textContent=label||"اضغط للتأكيد";
+  setTimeout(()=>{ b.classList.remove("armed"); b.textContent=old; },3000);
+  return false;
+}
+
+async function startNewSeason(){
+  const name=$("#newSeason").value.trim(); if(!name) throw new Error("اكتب اسم الموسم الجديد");
+  const c=DATA.config, st=liveStats(), now=Date.now();
+  const id="s"+now.toString(36);
+  // 1) أرشفة الموسم الحالي: الإحصائيات صغيرة، والبيانات الكاملة في مكان منفصل يمكن تفريغه
+  const oldId=c.season||("s"+seasonStart().toString(36));
+  await db("PUT","/seasons_data/"+oldId,{users:DATA.users,inbox:DATA.inbox,broadcast:DATA.broadcast});
+  await db("PUT","/seasons/"+oldId,{name:c.season_name||"الموسم الأول",start:seasonStart(),end:now,stats:st,has_data:true});
+  // 2) تصفير الصفحة وبدء الموسم الجديد (الحظر يبقى، الرسائل التي وصلت تُحذف)
+  const up={users:null,seen:null,inbox:null,broadcast:null,bseen:null,
+            "config/season":id,"config/season_name":name,"config/season_start":TS};
+  Object.entries(DATA.cmds).forEach(([dev,cm])=>{
+    Object.keys((cm&&cm.msgs)||{}).forEach(k=>{ if((DATA.seen[dev]||{})[k]) up["cmds/"+dev+"/msgs/"+k]=null; });
+  });
+  await db("PATCH","",up);
+  $("#newSeason").value=""; $("#seasonConfirm").hidden=true;
+  await loadAll();
 }
 
 /* ---------- العرض ---------- */
@@ -322,6 +446,7 @@ function render(){
         <button class="small" data-act="msg" data-id="${esc(i)}">رسالة</button>
         <button class="small" data-act="info" data-id="${esc(i)}">فحص</button>
         ${banned?`<button class="small ok" data-act="unban" data-id="${esc(i)}">فك الحظر</button>`:`<button class="small" data-act="ban" data-id="${esc(i)}">حظر</button>`}
+        <button class="small danger" data-act="deluser" data-id="${esc(i)}">حذف</button>
       </div>
       ${msgs.map(([k,m])=>`<div class="msg"><div class="t">${esc(m.text)}</div>
         <span class="seen ${seen[k]?"y":"n"}">${seen[k]?"✓ وصلت":"⏳ لم تصل"}</span>
@@ -357,6 +482,7 @@ function render(){
       <button class="small" data-act="delb" data-k="${esc(k)}">حذف</button></div></div>`).join("")
     :'<div class="empty">لم ترسل رسائل للكل بعد</div>';
 
+  renderSeasons();
   $("#minVer").value=DATA.config.min_version||"";
   $("#upUrl").value=DATA.config.update_url||"";
   $("#origPkg").value=DATA.config.orig_pkg||"";
@@ -368,7 +494,7 @@ function render(){
 /* ---------- الأحداث ---------- */
 document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{
   document.querySelectorAll(".tabs button").forEach(x=>x.classList.toggle("on",x===b));
-  ["inbox","users","broadcast","update"].forEach(t=>$("#tab-"+t).hidden=t!==b.dataset.tab);
+  ["inbox","users","broadcast","update","seasons"].forEach(t=>$("#tab-"+t).hidden=t!==b.dataset.tab);
 });
 $("#search").oninput=render;
 $("#refreshBtn").onclick=async()=>{
@@ -444,6 +570,18 @@ $("#users").onclick=e=>{
   const b=e.target.closest("button"); if(!b) return;
   const id=b.dataset.id, act=b.dataset.act;
   if(act==="msg"||act==="ban"||act==="info") openSheet(act,id);
+  if(act==="deluser"){
+    if(!b.classList.contains("armed")){
+      b.classList.add("armed"); b.textContent="اضغط للتأكيد";
+      setTimeout(()=>{ b.classList.remove("armed"); b.textContent="حذف"; },3000);
+      return;
+    }
+    // يحذف المستخدم ورسائله. الحظر (إن وجد) يبقى حتى لا يفلت منه بالحذف
+    run(async()=>{
+      const up={}; up["users/"+id]=null; up["seen/"+id]=null; up["cmds/"+id+"/msgs"]=null;
+      await db("PATCH","",up); await loadAll();
+    },"تم حذف المستخدم");
+  }
   if(act==="unban") run(async()=>{ await db("DELETE","/cmds/"+id+"/ban"); await loadAll(); },"تم فك الحظر");
   if(act==="delmsg") run(async()=>{ await db("DELETE","/cmds/"+id+"/msgs/"+b.dataset.k); await db("DELETE","/seen/"+id+"/"+b.dataset.k); await loadAll(); },"تم الحذف");
 };
@@ -471,6 +609,34 @@ $("#saveCfg").onclick=()=>run(async()=>{
   await db("PATCH","/config",{min_version:v,update_url:url});
   await loadAll();
 },"تم الحفظ");
+
+$("#startSeason").onclick=()=>{
+  if(!$("#newSeason").value.trim()){ toast("اكتب اسم الموسم الجديد"); $("#newSeason").focus(); return; }
+  $("#seasonConfirm").hidden=false;
+};
+$("#cancelSeason").onclick=()=>$("#seasonConfirm").hidden=true;
+$("#confirmSeason").onclick=async()=>{
+  const b=$("#confirmSeason"); b.disabled=true;
+  await run(startNewSeason,"بدأ الموسم الجديد");
+  b.disabled=false;
+};
+$("#seasonList").onclick=async e=>{
+  const b=e.target.closest("button"); if(!b) return;
+  const k=b.dataset.k, act=b.dataset.act;
+  if(act==="dl") run(async()=>{
+    const d=await db("GET","/seasons_data/"+k);
+    const blob=new Blob([JSON.stringify({season:DATA.seasons[k],data:d},null,2)],{type:"application/json"});
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+    a.download="skenzo_"+(DATA.seasons[k].name||k).replace(/[^\w\u0600-\u06FF.-]+/g,"_")+".json";
+    document.body.appendChild(a); a.click(); a.remove();
+  });
+  if(act==="purge"){ if(!armed(b)) return;
+    run(async()=>{ await db("DELETE","/seasons_data/"+k); await db("PATCH","/seasons/"+k,{has_data:false}); await loadAll(); },"تم تفريغ البيانات");
+  }
+  if(act==="delseason"){ if(!armed(b)) return;
+    run(async()=>{ await db("DELETE","/seasons_data/"+k); await db("DELETE","/seasons/"+k); await loadAll(); },"تم حذف الموسم");
+  }
+};
 
 $("#saveOrig").onclick=()=>run(async()=>{
   await db("PATCH","/config",{orig_pkg:$("#origPkg").value.trim(),orig_sig:$("#origSig").value.trim()});
