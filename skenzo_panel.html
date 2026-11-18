@@ -405,7 +405,7 @@ async function startNewSeason(){
   Object.entries(DATA.cmds).forEach(([dev,cm])=>{
     Object.keys((cm&&cm.msgs)||{}).forEach(k=>{ if((DATA.seen[dev]||{})[k]) up["cmds/"+dev+"/msgs/"+k]=null; });
   });
-  await db("PATCH","",up);
+  await db("PATCH","/",up);
   $("#newSeason").value=""; $("#seasonConfirm").hidden=true;
   await loadAll();
 }
@@ -579,7 +579,7 @@ $("#users").onclick=e=>{
     // يحذف المستخدم ورسائله. الحظر (إن وجد) يبقى حتى لا يفلت منه بالحذف
     run(async()=>{
       const up={}; up["users/"+id]=null; up["seen/"+id]=null; up["cmds/"+id+"/msgs"]=null;
-      await db("PATCH","",up); await loadAll();
+      await db("PATCH","/",up); await loadAll();
     },"تم حذف المستخدم");
   }
   if(act==="unban") run(async()=>{ await db("DELETE","/cmds/"+id+"/ban"); await loadAll(); },"تم فك الحظر");
