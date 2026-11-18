@@ -22,7 +22,12 @@ body{background:var(--bg);color:var(--fg);font:15px/1.6 var(--f-ui);
   padding:env(safe-area-inset-top,0) max(14px,env(safe-area-inset-right,0px)) 40px max(14px,env(safe-area-inset-left,0px));}
 [hidden]{display:none!important}
 .wrap{max-width:760px;margin:0 auto}
-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 0 10px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0 10px;
+  position:sticky;top:env(safe-area-inset-top,0px);z-index:12;background:var(--bg);border-bottom:1px solid var(--line)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:13;background:var(--bg)}
+.hbtns{display:flex;gap:8px;flex:0 0 auto}
+#refreshBtn.spin{opacity:.6}
+.updated{color:var(--muted);font-size:12px;text-align:center;margin:6px 0 0}
 .brand{font-weight:800;font-size:22px;letter-spacing:.5px;color:var(--fg);text-shadow:0 0 14px rgba(255,42,42,.7)}
 .brand span{color:var(--red)}
 .sub{color:var(--muted);font-size:12px}
@@ -38,8 +43,11 @@ textarea{min-height:90px;resize:vertical}
 label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
 .card{background:var(--panel);border:2px dashed var(--red-dim);border-radius:14px;padding:16px;margin:14px 0}
 .card h2{margin:0 0 6px;font-size:17px;color:var(--red);text-shadow:0 0 10px rgba(255,42,42,.5)}
-.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0}
-.tabs button{flex:1;min-width:100px}
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:6px 0}
+@media (max-width:520px){.tabs{grid-template-columns:repeat(2,1fr)}}
+.tabs button{position:relative}
+.badge{display:inline-block;min-width:20px;padding:0 6px;margin-inline-start:6px;border-radius:99px;background:var(--red);color:#fff;font-size:12px;line-height:20px;font-variant-numeric:tabular-nums}
+.user.unread{border-color:var(--red);box-shadow:0 0 12px rgba(255,42,42,.25)}
 .tabs button.on{background:#2a0c0c;border-color:var(--red);color:#fff;box-shadow:0 0 12px rgba(255,42,42,.35)}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
 .row>*{flex:1;min-width:140px}
@@ -76,7 +84,10 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
       <div class="brand">SKENZO <span>CONTROL</span></div>
       <div class="sub" id="who">لوحة تحكم المود</div>
     </div>
-    <button class="small" id="logoutBtn" hidden>خروج</button>
+    <div class="hbtns">
+      <button class="primary small" id="refreshBtn" hidden>⟳ تحديث</button>
+      <button class="small" id="logoutBtn" hidden>خروج</button>
+    </div>
   </header>
 
   <!-- تسجيل الدخول -->
@@ -94,23 +105,29 @@ label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
 
   <!-- اللوحة -->
   <section id="app" hidden>
+    <div class="updated" id="updated"></div>
     <div class="stats">
       <div class="stat"><b id="stUsers">0</b><small>مستخدم</small></div>
-      <div class="stat"><b id="stToday">0</b><small>نشط آخر 24 ساعة</small></div>
+      <div class="stat"><b id="stToday">0</b><small>نشط اليوم</small></div>
       <div class="stat"><b id="stBans">0</b><small>محظور الآن</small></div>
     </div>
 
     <div class="tabs">
-      <button data-tab="users" class="on">المستخدمون</button>
+      <button data-tab="inbox" class="on">الوارد<span class="badge" id="unread" hidden>0</span></button>
+      <button data-tab="users">المستخدمون</button>
       <button data-tab="broadcast">رسالة للكل</button>
       <button data-tab="update">التحديث</button>
     </div>
 
+    <!-- الرسائل الواردة من المستخدمين -->
+    <div id="tab-inbox">
+      <div id="inbox"></div>
+    </div>
+
     <!-- المستخدمون -->
-    <div id="tab-users">
-      <div class="row" style="margin-top:10px">
+    <div id="tab-users" hidden>
+      <div style="margin-top:10px">
         <input id="search" placeholder="ابحث بالمعرّف أو الموديل أو النسخة">
-        <button id="refreshBtn" style="flex:0 0 auto">تحديث القائمة</button>
       </div>
       <div id="users"></div>
     </div>
@@ -182,7 +199,7 @@ const CFG = {
 };
 const $ = s => document.querySelector(s);
 let idToken = null, tokenExp = 0, refreshTok = null, email = "";
-let DATA = {users:{}, cmds:{}, seen:{}, broadcast:{}, bseen:{}, config:{}};
+let DATA = {users:{}, cmds:{}, seen:{}, broadcast:{}, bseen:{}, config:{}, inbox:{}};
 
 function toast(t){ const el=$("#toast"); el.textContent=t; el.hidden=false; clearTimeout(toast._t); toast._t=setTimeout(()=>el.hidden=true,2200); }
 function store(k,v){ try{ v==null?localStorage.removeItem(k):localStorage.setItem(k,v);}catch(e){} }
@@ -233,10 +250,11 @@ async function db(method, path, body){
 const TS = {".sv":"timestamp"};
 
 async function loadAll(){
-  const [users,cmds,seen,broadcast,bseen,config] = await Promise.all(
-    ["/users","/cmds","/seen","/broadcast","/bseen","/config"].map(p=>db("GET",p)));
-  DATA = {users:users||{}, cmds:cmds||{}, seen:seen||{}, broadcast:broadcast||{}, bseen:bseen||{}, config:config||{}};
+  const [users,cmds,seen,broadcast,bseen,config,inbox] = await Promise.all(
+    ["/users","/cmds","/seen","/broadcast","/bseen","/config","/inbox"].map(p=>db("GET",p)));
+  DATA = {users:users||{}, cmds:cmds||{}, seen:seen||{}, broadcast:broadcast||{}, bseen:bseen||{}, config:config||{}, inbox:inbox||{}};
   render();
+  $("#updated").textContent = "آخر تحديث " + new Date().toLocaleTimeString("ar-TN",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
 }
 
 /* ---------- العرض ---------- */
@@ -277,6 +295,25 @@ function render(){
     </div>`;
   }).join("");
 
+  const IN=Object.entries(DATA.inbox).sort((a,b)=>(b[1].ts||0)-(a[1].ts||0));
+  const unread=IN.filter(([k,m])=>!m.read).length;
+  $("#unread").textContent=unread; $("#unread").hidden=!unread;
+  $("#inbox").innerHTML=IN.length?IN.map(([k,m])=>{
+    const u=DATA.users[m.dev]||{}, banned=(DATA.cmds[m.dev]||{}).ban&&DATA.cmds[m.dev].ban.until>now;
+    return `<div class="user ${m.read?"":"unread"}">
+      <div class="top"><span class="id">${esc(m.short||String(m.dev).slice(0,6))}</span>
+        ${m.read?"":'<span class="chip ban">جديدة</span>'}
+        ${banned?'<span class="chip ban">محظور</span>':""}</div>
+      <div class="meta">${esc(m.model||u.model||"?")} · نسخة ${esc(m.version||u.version||"?")} · ${ago(m.ts)}</div>
+      <div class="msg" style="border:0;padding-top:4px"><div class="t">${esc(m.text)}</div></div>
+      <div class="actions">
+        <button class="small primary" data-act="reply" data-id="${esc(m.dev)}" data-k="${esc(k)}">رد</button>
+        ${m.read?"":`<button class="small" data-act="read" data-k="${esc(k)}">تمت القراءة</button>`}
+        ${banned?"":`<button class="small" data-act="ban" data-id="${esc(m.dev)}">حظر</button>`}
+        <button class="small" data-act="delin" data-k="${esc(k)}">حذف</button>
+      </div></div>`;
+  }).join(""):'<div class="empty">لا توجد رسائل من المستخدمين. ما يرسلونه من خانة "أرسل رسالة" في المود يظهر هنا.</div>';
+
   const B=Object.entries(DATA.broadcast).sort((a,b)=>(b[1].ts||0)-(a[1].ts||0));
   $("#bList").innerHTML=B.length?B.map(([k,m])=>`<div class="user"><div class="msg" style="border:0;margin:0;padding:0">
       <div class="t">${esc(m.text)}<div class="meta">${ago(m.ts)} · ${m.lang==="ar"?"عربي":m.lang==="en"?"English":"إشعار"}</div></div>
@@ -293,10 +330,16 @@ function render(){
 /* ---------- الأحداث ---------- */
 document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{
   document.querySelectorAll(".tabs button").forEach(x=>x.classList.toggle("on",x===b));
-  ["users","broadcast","update"].forEach(t=>$("#tab-"+t).hidden=t!==b.dataset.tab);
+  ["inbox","users","broadcast","update"].forEach(t=>$("#tab-"+t).hidden=t!==b.dataset.tab);
 });
 $("#search").oninput=render;
-$("#refreshBtn").onclick=()=>run(loadAll,"تم التحديث");
+$("#refreshBtn").onclick=async()=>{
+  const b=$("#refreshBtn"); b.disabled=true; b.classList.add("spin");
+  await run(loadAll,"تم التحديث");
+  b.disabled=false; b.classList.remove("spin");
+};
+// تحديث تلقائي كل 30 ثانية أثناء فتح اللوحة (لا يقاطع نافذة رسالة مفتوحة)
+setInterval(()=>{ if(idToken && $("#sheet").hidden && document.visibilityState==="visible") loadAll().catch(()=>{}); }, 30000);
 
 async function run(fn, okMsg){
   try{ await fn(); if(okMsg) toast(okMsg); }
@@ -334,6 +377,14 @@ $("#users").onclick=e=>{
   if(act==="unban") run(async()=>{ await db("DELETE","/cmds/"+id+"/ban"); await loadAll(); },"تم فك الحظر");
   if(act==="delmsg") run(async()=>{ await db("DELETE","/cmds/"+id+"/msgs/"+b.dataset.k); await db("DELETE","/seen/"+id+"/"+b.dataset.k); await loadAll(); },"تم الحذف");
 };
+$("#inbox").onclick=e=>{
+  const b=e.target.closest("button"); if(!b) return;
+  const act=b.dataset.act, k=b.dataset.k, id=b.dataset.id;
+  if(act==="reply"){ openSheet("msg",id); if(!DATA.inbox[k].read) db("PATCH","/inbox/"+k,{read:true}).catch(()=>{}); DATA.inbox[k].read=true; }
+  if(act==="ban") openSheet("ban",id);
+  if(act==="read") run(async()=>{ await db("PATCH","/inbox/"+k,{read:true}); await loadAll(); });
+  if(act==="delin") run(async()=>{ await db("DELETE","/inbox/"+k); await loadAll(); },"تم الحذف");
+};
 $("#bList").onclick=e=>{
   const b=e.target.closest("button[data-act=delb]"); if(!b) return;
   run(async()=>{ await db("DELETE","/broadcast/"+b.dataset.k); await db("DELETE","/bseen/"+b.dataset.k); await loadAll(); },"تم الحذف");
@@ -357,13 +408,13 @@ $("#loginForm").onsubmit=async e=>{
   $("#loginBtn").disabled=false;
 };
 async function enter(){
-  $("#login").hidden=true; $("#app").hidden=false; $("#logoutBtn").hidden=false;
+  $("#login").hidden=true; $("#app").hidden=false; $("#logoutBtn").hidden=false; $("#refreshBtn").hidden=false;
   $("#who").textContent=email;
   try{ await loadAll(); }catch(e){ toast(e.message); }
 }
 function logout(){
   idToken=null; refreshTok=null; store("sk_rt",null);
-  $("#login").hidden=false; $("#app").hidden=true; $("#logoutBtn").hidden=true; $("#who").textContent="لوحة تحكم المود";
+  $("#login").hidden=false; $("#app").hidden=true; $("#logoutBtn").hidden=true; $("#refreshBtn").hidden=true; $("#who").textContent="لوحة تحكم المود";
 }
 $("#logoutBtn").onclick=logout;
 
